@@ -1,8 +1,6 @@
 package com.gkev.MySafaricom.Controller;
 
-import com.gkev.MySafaricom.records.StkPushInitiateRequest;
-import com.gkev.MySafaricom.records.StkPushQueryResponse;
-import com.gkev.MySafaricom.records.StkPushResponse;
+import com.gkev.MySafaricom.records.*;
 import com.gkev.MySafaricom.service.MpesaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -44,4 +42,22 @@ public class MpesaController {
     public Mono<StkPushQueryResponse> queryTransaction(@PathVariable String checkoutRequestId) {
         return mpesaService.queryStkPush(checkoutRequestId);
     }
+
+    @PostMapping("/c2b/validation")
+    public Mono<MpesaC2BValidationResponse> validatePayment(
+            @Valid @RequestBody MpesaC2BValidateRequest request
+    ) {
+
+        log.info("M-Pesa C2B validation request: {}", request);
+
+        return Mono.just(
+                new MpesaC2BValidationResponse(
+                        "0",
+                        "Accepted"
+                )
+        );
+    }
+
+
+
 }
