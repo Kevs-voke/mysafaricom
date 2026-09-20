@@ -29,7 +29,11 @@ public class MpesaService {
     private final String passkey;
     private final String stkPushUrl;
     private final String stkPushQueryUrl;
+    private final String c2bRegisterUrl;
     private final WebClient webClient;
+    private final String c2bConfirmationUrl;
+    private final String c2bValidationUrl;
+    private final String simulateC2B;
 
     private final Mono<String> cachedAccessToken;
 
@@ -37,11 +41,16 @@ public class MpesaService {
             @Value("${safaricom.consumer_key}") String consumerKey,
             @Value("${safaricom.consumer_secret}") String consumerSecret,
             @Value("${safaricom.auth_url}") String authUrl,
-            @Value("${ngrok.callback}") String callbackUrl,
+            @Value("${ngrok.stkPushCallback}") String callbackUrl,
             @Value("${safaricom.shortcode}") String shortcode,
             @Value("${safaricom.passkey}") String passkey,
             @Value("${safaricom.stk_push_url}") String stkPushUrl,
             @Value("${safaricom.stk_push_query_url}") String stkPushQueryUrl,
+            @Value("${safaricom.register_url}") String c2bRegisterUrl,
+            @Value("${ngrok.c2bconfirmation}") String c2bConfirmationUrl,
+            @Value("${ngrok.c2bvalidation}") String c2bValidationUrl,
+            @Value("${safaricom.c2b_simulate}")String simulateC2B,
+
             WebClient.Builder webClientBuilder) {
 
         this.consumerKey = consumerKey;
@@ -52,7 +61,12 @@ public class MpesaService {
         this.passkey = passkey;
         this.stkPushUrl = stkPushUrl;
         this.stkPushQueryUrl = stkPushQueryUrl;
+        this.c2bRegisterUrl = c2bRegisterUrl;
+        this.c2bConfirmationUrl= c2bConfirmationUrl;
+        this.c2bValidationUrl = c2bValidationUrl;
+        this.simulateC2B = simulateC2B;
         this.webClient = webClientBuilder.build();
+
 
         this.cachedAccessToken = Mono.defer(this::fetchAccessToken)
                 .cache(Duration.ofMinutes(55));
@@ -207,6 +221,56 @@ public class MpesaService {
                                                 })
                                 )
                                 .bodyToMono(StkPushQueryResponse.class)
+                );
+    }
+    public Mono<RegisterUrlsResponse> registerC2BUrls(){
+        C2BRegisterUrl registerUrl = new C2BRegisterUrl(
+                "600978",
+                "Completed",
+                c2bConfirmationUrl,
+                c2bValidationUrl
+        );
+        return getAccessToken()
+                .flatMap(token ->
+                webClient
+                .post()
+                .uri(c2bRegisterUrl)
+                .headers(headers -> headers.setBearerAuth(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(registerUrl)
+                .retrieve()
+                .onStatus(
+                        HttpStatusCode::isError,
+                        response -> response.bodyToMono(String.class)
+                                .flatMap(body -> Mono.error(
+                                        new RuntimeException(
+                                                "C2B URL registration failed: " + body
+                                        )
+                                ))
+                )
+                .bodyToMono(RegisterUrlsResponse.class));
+
+    }
+    public Mono<C2BSimulateResponse> simulateC2B(C2BSimulateRequest c2BSimulateRequest) {
+        return getAccessToken()
+                .flatMap(token ->
+                        webClient
+                                .post()
+                                .uri(simulateC2B)
+                                .headers(headers -> headers.setBearerAuth(token))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .bodyValue(c2BSimulateRequest)
+                                .retrieve()
+                                .onStatus(
+                                        HttpStatusCode::isError,
+                                        response -> response.bodyToMono(String.class)
+                                                .flatMap(errorBody ->
+                                                        Mono.error(new RuntimeException(
+                                                                "C2B simulation failed: " + errorBody
+                                                        ))
+                                                )
+                                )
+                                .bodyToMono(C2BSimulateResponse.class)
                 );
     }
 }
